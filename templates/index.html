@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block body %}
+<div class="row g-3">
+  {% for sub, stat in stats.items() %}
+  <div class="col-md-4">
+    <div class="card p-3 h-100">
+      <div class="d-flex align-items-start justify-content-between mb-2">
+        <div>
+          <h5 class="mb-0">{{ sub }}</h5>
+          <div class="small-muted">Chapters: {{ stat.total }}</div>
+        </div>
+        <div class="text-end">
+          <a href="{{ url_for('subject_view', name=sub) }}" class="btn btn-sm btn-outline-primary">Open</a>
+        </div>
+      </div>
+
+      <div class="mt-2">
+        <div class="small-muted mb-1">Overall progress</div>
+        <div class="progress" style="height:14px;">
+          <div class="progress-bar" role="progressbar" style="width: {{ stat.percent }}%;" aria-valuenow="{{ stat.percent }}" aria-valuemin="0" aria-valuemax="100">{{ stat.percent }}%</div>
+        </div>
+      </div>
+
+      <div class="mt-3 small-muted">
+        Completed chapters: {{ stat.completed }}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
