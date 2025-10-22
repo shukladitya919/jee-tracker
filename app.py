@@ -5,34 +5,30 @@ import os
 app = Flask(__name__)
 
 # -----------------------
-# Database configuration
+# Database configuration for Render persistence
 # -----------------------
-DB_PATH = '/mnt/data/tracker.db'  # Persistent disk on Render
-if not os.path.exists(os.path.dirname(DB_PATH)):
-    os.makedirs(os.path.dirname(DB_PATH))
+# Use /tmp directory which persists between deployments on Render
+DB_PATH = '/tmp/tracker.db'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_PATH}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 # -----------------------
-# Models
+# Models (keep your existing models)
 # -----------------------
 class Chapter(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    subject = db.Column(db.String(50), nullable=False)   # Physics / Mathematics / Chemistry
-    category = db.Column(db.String(50), nullable=False)  # Category 1..4
+    subject = db.Column(db.String(50), nullable=False)
+    category = db.Column(db.String(50), nullable=False)
     index_in_list = db.Column(db.Integer, nullable=False)
     title = db.Column(db.String(300), nullable=False)
     
-    # Common actions
     theory = db.Column(db.Boolean, default=False)
     revision_count = db.Column(db.Integer, default=0)
     pyqs = db.Column(db.Boolean, default=False)
     module_a = db.Column(db.Boolean, default=False)
     module_b = db.Column(db.Boolean, default=False)
-    
-    # Subject-specific
     physics_galaxy = db.Column(db.Boolean, default=False)
     cengage = db.Column(db.Boolean, default=False)
 
@@ -59,18 +55,14 @@ class Chapter(db.Model):
 class SubjectBooks(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     subject = db.Column(db.String(50), nullable=False, unique=True)
-    
-    # Mathematics books
     pinkbook = db.Column(db.Boolean, default=False)
     yellowbook = db.Column(db.Boolean, default=False)
     play_with_graphs = db.Column(db.Boolean, default=False)
-    
-    # Chemistry books
     n_awasthi = db.Column(db.Boolean, default=False)
     ms_chauhan = db.Column(db.Boolean, default=False)
 
 # -----------------------
-# Seed data
+# Seed data (your existing seed data)
 # -----------------------
 SEED = {
     "Physics": [
@@ -112,28 +104,45 @@ SEED = {
 }
 
 # -----------------------
-# Initialize DB and seed
+# Initialize DB - Only seed if database is empty
 # -----------------------
 def init_db():
-    db.create_all()
-    for subject, items in SEED.items():
-        for idx, (cat, title) in enumerate(items, start=1):
-            if not Chapter.query.filter_by(subject=subject, title=title).first():
-                db.session.add(Chapter(subject=subject, category=cat, index_in_list=idx, title=title))
-        if not SubjectBooks.query.filter_by(subject=subject).first():
-            db.session.add(SubjectBooks(subject=subject))
-    db.session.commit()
-
-with app.app_context():
-    init_db()
+    with app.app_context():
+        db.create_all()
+        
+        # Check if database is already populated
+        existing_chapters = Chapter.query.first()
+        if not existing_chapters:
+            # Seed only if database is empty
+            print("Seeding database for the first time...")
+            for subject, items in SEED.items():
+                for idx, (cat, title) in enumerate(items, start=1):
+                    if not Chapter.query.filter_by(subject=subject, title=title).first():
+                        db.session.add(Chapter(subject=subject, category=cat, index_in_list=idx, title=title))
+                if not SubjectBooks.query.filter_by(subject=subject).first():
+                    db.session.add(SubjectBooks(subject=subject))
+            db.session.commit()
+            print("Database seeded successfully!")
+        else:
+            print("Database already exists, skipping seed.")
 
 # -----------------------
-# Routes
+# Routes (your existing routes)
 # -----------------------
 @app.route('/')
 def index():
     subjects = ["Physics", "Mathematics", "Chemistry"]
-    stats = {s: len(Chapter.query.filter_by(subject=s).all()) for s in subjects}
+    stats = {}
+    for subject in subjects:
+        chapters = Chapter.query.filter_by(subject=subject).all()
+        total = len(chapters)
+        if total == 0:
+            stats[subject] = {"total": 0, "percent": 0}
+        else:
+            max_marks = sum(c.max_possible_progress() for c in chapters)
+            marked = sum(c.progress_count() for c in chapters)
+            percent = round((marked/max_marks)*100) if max_marks > 0 else 0
+            stats[subject] = {"total": total, "percent": percent}
     return render_template('index.html', stats=stats)
 
 @app.route('/subject/<name>')
@@ -142,7 +151,32 @@ def subject_view(name):
     categories = {}
     for c in chapters:
         categories.setdefault(c.category, []).append(c)
-    return render_template('subject.html', subject=name, categories=categories)
+    
+    # Calculate category progress
+    cat_progress = {}
+    for cat, chs in categories.items():
+        max_marks = sum(c.max_possible_progress() for c in chs)
+        marked = sum(c.progress_count() for c in chs)
+        percent = round((marked/max_marks)*100) if max_marks > 0 else 0
+        cat_progress[cat] = percent
+    
+    # Calculate subject progress
+    total_chapters = len(chapters)
+    if total_chapters == 0:
+        subj_progress = 0
+    else:
+        max_marks = sum(c.max_possible_progress() for c in chapters)
+        marked = sum(c.progress_count() for c in chapters)
+        subj_progress = round((marked/max_marks)*100) if max_marks > 0 else 0
+    
+    subject_books = SubjectBooks.query.filter_by(subject=name).first()
+    
+    return render_template('subject.html', 
+                         subject=name, 
+                         categories=categories, 
+                         cat_progress=cat_progress,
+                         subj={"total": total_chapters, "percent": subj_progress},
+                         subject_books=subject_books)
 
 @app.route('/toggle', methods=['POST'])
 def toggle():
@@ -166,20 +200,25 @@ def toggle():
         
         db.session.commit()
         
-        # Calculate progress
+        # Calculate updated progress
         chapter_progress = ch.progress_count()
         chapter_max = ch.max_possible_progress()
-        percent = (chapter_progress / chapter_max * 100) if chapter_max > 0 else 0
         
         # Calculate category progress
         category_chapters = Chapter.query.filter_by(subject=ch.subject, category=ch.category).all()
         total_progress = sum(c.progress_count() for c in category_chapters)
         total_max = sum(c.max_possible_progress() for c in category_chapters)
-        category_percent = (total_progress / total_max * 100) if total_max > 0 else 0
+        category_percent = round((total_progress/total_max)*100) if total_max > 0 else 0
+        
+        # Calculate subject progress
+        subject_chapters = Chapter.query.filter_by(subject=ch.subject).all()
+        subject_total_progress = sum(c.progress_count() for c in subject_chapters)
+        subject_total_max = sum(c.max_possible_progress() for c in subject_chapters)
+        subject_percent = round((subject_total_progress/subject_total_max)*100) if subject_total_max > 0 else 0
         
         return jsonify({
             "ok": True,
-            "percent": percent,
+            "subject_percent": subject_percent,
             "category_percent": category_percent,
             "chapter_progress": chapter_progress,
             "chapter_max": chapter_max,
@@ -201,53 +240,12 @@ def toggle():
         else:
             return jsonify({"ok": False}), 400
 
-# -----------------------
-# Run App
-# -----------------------
-if __name__ == '__main__':
-    app.run(debug=True)    cengage = db.Column(db.Boolean, default=False)
+# Initialize database when app starts
+init_db()
 
-    def progress_count(self):
-        count = sum([
-            self.theory,
-            self.pyqs,
-            self.module_a,
-            self.module_b,
-            self.revision_count > 0
-        ])
-        if self.subject == "Physics":
-            count += self.physics_galaxy
-        elif self.subject == "Mathematics":
-            count += self.cengage
-        return count
-
-    def max_possible_progress(self):
-        base = 5
-        if self.subject in ["Physics", "Mathematics"]:
-            return base + 1
-        return base
-
-class SubjectBooks(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    subject = db.Column(db.String(50), nullable=False, unique=True)
-    
-    # Mathematics books
-    pinkbook = db.Column(db.Boolean, default=False)
-    yellowbook = db.Column(db.Boolean, default=False)
-    play_with_graphs = db.Column(db.Boolean, default=False)
-    
-    # Chemistry books
-    n_awasthi = db.Column(db.Boolean, default=False)
-    ms_chauhan = db.Column(db.Boolean, default=False)
-
-# -----------------------
-# Seed data
-# -----------------------
-SEED = {
-    "Physics": [
-        ("1", "Ray Optics"), ("1", "Electrostatics"), ("1", "Current Electricity"),
-        ("1", "Magnetic Effects Of Current"), ("1", "Modern Physics"),
-        ("2", "Thermodynamics"), ("2", "Rotational Motion"), ("2", "Mechanical Properties of Fluids"),
+# Remove the app.run() for Render deployment
+# if __name__ == '__main__':
+#     app.run(debug=True)of Fluids"),
         ("2", "Semiconductors"), ("2", "Capacitance"), ("2", "Work Power Energy"),
         ("3", "Wave Optics"), ("3", "Electromagnetic Induction"), ("3", "Alternating Current"),
         ("3", "Gravitation"), ("3", "Kinetic Theory Of Gases"), ("3", "Oscillations"),
