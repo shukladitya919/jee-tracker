@@ -293,8 +293,8 @@ def toggle():
 init_db()
 
 # Remove the app.run() for Render deployment
-# if __name__ == '__main__':
-#     app.run(debug=True)of Fluids"),
+if __name__ == '__main__':
+    app.run(debug=True)of Fluids"),
         ("2", "Semiconductors"), ("2", "Capacitance"), ("2", "Work Power Energy"),
         ("3", "Wave Optics"), ("3", "Electromagnetic Induction"), ("3", "Alternating Current"),
         ("3", "Gravitation"), ("3", "Kinetic Theory Of Gases"), ("3", "Oscillations"),
