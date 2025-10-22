@@ -5,17 +5,16 @@ import os
 app = Flask(__name__)
 
 # -----------------------
-# Database configuration
+# Database configuration for Railway
 # -----------------------
-def get_database_url():
-    database_url = os.environ.get('DATABASE_URL', 'sqlite:///tracker.db')
-    if database_url.startswith('postgres://'):
-        database_url = database_url.replace('postgres://', 'postgresql://', 1)
-    return database_url
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///tracker.db')
+# Fix PostgreSQL URL format
+if app.config['SQLALCHEMY_DATABASE_URI'] and app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
+    app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace('postgres://', 'postgresql://', 1)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = get_database_url()
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
 
 # -----------------------
 # Models
@@ -249,14 +248,39 @@ def toggle():
             return jsonify({"ok": False}), 400
 
 # -----------------------
-# Initialize database and final setup
+# Initialize database
 # -----------------------
+def init_db():
+    with app.app_context():
+        try:
+            db.create_all()
+            
+            # Check if we need to seed
+            if Chapter.query.count() == 0:
+                print("Seeding database...")
+                for subject, items in SEED.items():
+                    for idx, (cat, title) in enumerate(items, start=1):
+                        db.session.add(Chapter(
+                            subject=subject, 
+                            category=cat, 
+                            index_in_list=idx, 
+                            title=title
+                        ))
+                    db.session.add(SubjectBooks(subject=subject))
+                db.session.commit()
+                print("Database seeded successfully!")
+            else:
+                print("Database already populated")
+                
+        except Exception as e:
+            print(f"Database error: {e}")
+
+# Initialize when app starts
 with app.app_context():
     init_db()
 
-# For local development
+# For Railway deployment
 if __name__ == '__main__':
     app.run(debug=False)
 
-# Fix for Gunicorn
 app = app
