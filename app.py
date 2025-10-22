@@ -117,3 +117,11 @@ if __name__ == '__main__':
     check_python_environment()
     print("\n")
     check_postgresql_simple()
+
+init_db()
+
+if __name__ == '__main__':
+    app.run(debug=False)
+
+# ⭐ ADD THIS LINE - fixes Gunicorn error ⭐
+app = app
