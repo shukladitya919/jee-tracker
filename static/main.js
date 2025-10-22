@@ -1,16 +1,9 @@
-// Wait for DOM to be fully loaded
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize event listeners for chapter checkboxes
     initializeChapterCheckboxes();
-    
-    // Initialize event listeners for revision buttons
     initializeRevisionButtons();
-    
-    // Initialize event listeners for book checkboxes
     initializeBookCheckboxes();
 });
 
-// Initialize chapter checkbox event listeners
 function initializeChapterCheckboxes() {
     const checkboxes = document.querySelectorAll('.chapter-checkbox');
     checkboxes.forEach(checkbox => {
@@ -22,7 +15,6 @@ function initializeChapterCheckboxes() {
     });
 }
 
-// Initialize revision button event listeners
 function initializeRevisionButtons() {
     const buttons = document.querySelectorAll('.revision-btn');
     buttons.forEach(button => {
@@ -34,7 +26,6 @@ function initializeRevisionButtons() {
     });
 }
 
-// Initialize book checkbox event listeners
 function initializeBookCheckboxes() {
     const bookCheckboxes = document.querySelectorAll('input[data-subject]');
     bookCheckboxes.forEach(checkbox => {
@@ -46,17 +37,14 @@ function initializeBookCheckboxes() {
     });
 }
 
-// Chapter toggles for boolean fields
 function toggleChapter(id, field) {
     toggleRequest(id, field, 'toggle');
 }
 
-// Revision counter with increment/decrement
 function toggleRevision(id, action) {
     toggleRequest(id, 'revision_count', action);
 }
 
-// Subject-level book toggles
 function toggleBook(subject, field) {
     fetch('/toggle', {
         method: 'POST',
@@ -76,7 +64,6 @@ function toggleBook(subject, field) {
     });
 }
 
-// Generic toggle function
 async function toggleRequest(id, field, action) {
     try {
         const res = await fetch('/toggle', {
@@ -91,14 +78,12 @@ async function toggleRequest(id, field, action) {
             return;
         }
         
-        // Update subject progress
         const subjBar = document.getElementById('subject-progress');
         if (subjBar && data.subject_percent !== undefined) {
             subjBar.style.width = data.subject_percent + '%';
             subjBar.textContent = data.subject_percent + '%';
         }
         
-        // Update chapter progress
         const chapProg = document.getElementById('chapprog-' + id);
         const chapBar = document.getElementById('chapbar-' + id);
         if (chapProg && chapBar) {
@@ -106,12 +91,10 @@ async function toggleRequest(id, field, action) {
             chapBar.style.width = (data.chapter_progress/data.chapter_max*100) + '%';
         }
         
-        // Update revision count if applicable
         if (field === 'revision_count') {
             const revisionElement = document.getElementById('revision_' + id);
             if (revisionElement) {
                 revisionElement.textContent = data.revision_count;
-                // Find the decrement button in the same container
                 const container = revisionElement.closest('.d-flex');
                 if (container) {
                     const decrementBtn = container.querySelector('.btn-outline-danger');
@@ -122,7 +105,6 @@ async function toggleRequest(id, field, action) {
             }
         }
         
-        // Update category progress
         const chapterElement = document.querySelector(`input[data-id="${id}"]`);
         if (chapterElement) {
             const card = chapterElement.closest('.card');
