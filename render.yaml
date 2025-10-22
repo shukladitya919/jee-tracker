@@ -8,3 +8,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.13
+
+  - type: postgres
+    name: jee-tracker-db
+    plan: free
+    ipAllowList: []
