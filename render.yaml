@@ -5,6 +5,9 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
+    disks:
+      - name: data
+        path: /mnt/data
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.13
