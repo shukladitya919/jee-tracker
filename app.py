@@ -4,20 +4,13 @@ import os
 
 app = Flask(__name__)
 
-# -----------------------
-# Database configuration for Railway
-# -----------------------
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///tracker.db')
-# Fix PostgreSQL URL format
-if app.config['SQLALCHEMY_DATABASE_URI'] and app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgres://'):
-    app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace('postgres://', 'postgresql://', 1)
-
+# Database configuration for Vercel
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tracker.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-
 # -----------------------
-# Models
+# Models (your existing models)
 # -----------------------
 class Chapter(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -64,7 +57,7 @@ class SubjectBooks(db.Model):
     ms_chauhan = db.Column(db.Boolean, default=False)
 
 # -----------------------
-# Seed data
+# Seed data (your existing SEED data)
 # -----------------------
 SEED = {
     "Physics": [
@@ -106,7 +99,7 @@ SEED = {
 }
 
 # -----------------------
-# Initialize DB function - MUST BE DEFINED BEFORE CALLING IT
+# Initialize DB
 # -----------------------
 def init_db():
     with app.app_context():
@@ -115,7 +108,6 @@ def init_db():
         # Check if database is already populated
         existing_chapters = Chapter.query.first()
         if not existing_chapters:
-            # Seed only if database is empty
             print("Seeding database for the first time...")
             for subject, items in SEED.items():
                 for idx, (cat, title) in enumerate(items, start=1):
@@ -134,7 +126,7 @@ def init_db():
             print("Database already exists, skipping seed.")
 
 # -----------------------
-# Routes
+# Routes (your existing routes)
 # -----------------------
 @app.route('/')
 def index():
@@ -247,40 +239,8 @@ def toggle():
         else:
             return jsonify({"ok": False}), 400
 
-# -----------------------
 # Initialize database
-# -----------------------
-def init_db():
-    with app.app_context():
-        try:
-            db.create_all()
-            
-            # Check if we need to seed
-            if Chapter.query.count() == 0:
-                print("Seeding database...")
-                for subject, items in SEED.items():
-                    for idx, (cat, title) in enumerate(items, start=1):
-                        db.session.add(Chapter(
-                            subject=subject, 
-                            category=cat, 
-                            index_in_list=idx, 
-                            title=title
-                        ))
-                    db.session.add(SubjectBooks(subject=subject))
-                db.session.commit()
-                print("Database seeded successfully!")
-            else:
-                print("Database already populated")
-                
-        except Exception as e:
-            print(f"Database error: {e}")
+init_db()
 
-# Initialize when app starts
-with app.app_context():
-    init_db()
-
-# For Railway deployment
-if __name__ == '__main__':
-    app.run(debug=False)
-
+# Vercel requirement
 app = app
