@@ -4,14 +4,12 @@ import os
 
 app = Flask(__name__)
 
-# Database configuration for Vercel
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tracker.db'
+# MySQL configuration - local database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:password@localhost/jee_tracker'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# -----------------------
-# Models (your existing models)
-# -----------------------
+# Models
 class Chapter(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     subject = db.Column(db.String(50), nullable=False)
@@ -28,23 +26,14 @@ class Chapter(db.Model):
     cengage = db.Column(db.Boolean, default=False)
 
     def progress_count(self):
-        count = sum([
-            self.theory,
-            self.pyqs,
-            self.module_a,
-            self.module_b,
-            self.revision_count > 0
-        ])
-        if self.subject == "Physics":
-            count += self.physics_galaxy
-        elif self.subject == "Mathematics":
-            count += self.cengage
+        count = sum([self.theory, self.pyqs, self.module_a, self.module_b, self.revision_count > 0])
+        if self.subject == "Physics": count += self.physics_galaxy
+        elif self.subject == "Mathematics": count += self.cengage
         return count
 
     def max_possible_progress(self):
         base = 5
-        if self.subject in ["Physics", "Mathematics"]:
-            return base + 1
+        if self.subject in ["Physics", "Mathematics"]: return base + 1
         return base
 
 class SubjectBooks(db.Model):
@@ -56,9 +45,7 @@ class SubjectBooks(db.Model):
     n_awasthi = db.Column(db.Boolean, default=False)
     ms_chauhan = db.Column(db.Boolean, default=False)
 
-# -----------------------
-# Seed data (your existing SEED data)
-# -----------------------
+# Seed data
 SEED = {
     "Physics": [
         ("1", "Ray Optics"), ("1", "Electrostatics"), ("1", "Current Electricity"),
@@ -98,36 +85,24 @@ SEED = {
     ]
 }
 
-# -----------------------
-# Initialize DB
-# -----------------------
+# Initialize database
 def init_db():
     with app.app_context():
         db.create_all()
         
-        # Check if database is already populated
-        existing_chapters = Chapter.query.first()
-        if not existing_chapters:
-            print("Seeding database for the first time...")
+        # Check if database is empty
+        if Chapter.query.count() == 0:
+            print("Seeding database...")
             for subject, items in SEED.items():
                 for idx, (cat, title) in enumerate(items, start=1):
-                    if not Chapter.query.filter_by(subject=subject, title=title).first():
-                        db.session.add(Chapter(
-                            subject=subject, 
-                            category=cat, 
-                            index_in_list=idx, 
-                            title=title
-                        ))
-                if not SubjectBooks.query.filter_by(subject=subject).first():
-                    db.session.add(SubjectBooks(subject=subject))
+                    db.session.add(Chapter(
+                        subject=subject, category=cat, index_in_list=idx, title=title
+                    ))
+                db.session.add(SubjectBooks(subject=subject))
             db.session.commit()
             print("Database seeded successfully!")
-        else:
-            print("Database already exists, skipping seed.")
 
-# -----------------------
-# Routes (your existing routes)
-# -----------------------
+# Routes
 @app.route('/')
 def index():
     subjects = ["Physics", "Mathematics", "Chemistry"]
@@ -151,7 +126,7 @@ def subject_view(name):
     for c in chapters:
         categories.setdefault(c.category, []).append(c)
     
-    # Calculate category progress
+    # Calculate progress
     cat_progress = {}
     for cat, chs in categories.items():
         max_marks = sum(c.max_possible_progress() for c in chs)
@@ -159,14 +134,10 @@ def subject_view(name):
         percent = round((marked/max_marks)*100) if max_marks > 0 else 0
         cat_progress[cat] = percent
     
-    # Calculate subject progress
     total_chapters = len(chapters)
-    if total_chapters == 0:
-        subj_progress = 0
-    else:
-        max_marks = sum(c.max_possible_progress() for c in chapters)
-        marked = sum(c.progress_count() for c in chapters)
-        subj_progress = round((marked/max_marks)*100) if max_marks > 0 else 0
+    max_marks = sum(c.max_possible_progress() for c in chapters)
+    marked = sum(c.progress_count() for c in chapters)
+    subj_progress = round((marked/max_marks)*100) if max_marks > 0 else 0
     
     subject_books = SubjectBooks.query.filter_by(subject=name).first()
     
@@ -186,15 +157,12 @@ def toggle():
 
     if ch_id:
         ch = Chapter.query.get(ch_id)
-        if not ch:
-            return jsonify({"ok": False}), 404
+        if not ch: return jsonify({"ok": False}), 404
         
         if field == 'revision_count':
-            if action == 'increment':
-                ch.revision_count += 1
-            elif action == 'decrement' and ch.revision_count > 0:
-                ch.revision_count -= 1
-        elif field in ['theory', 'pyqs', 'module_a', 'module_b', 'physics_galaxy', 'cengage']:
+            if action == 'increment': ch.revision_count += 1
+            elif action == 'decrement' and ch.revision_count > 0: ch.revision_count -= 1
+        elif field in ['theory','pyqs','module_a','module_b','physics_galaxy','cengage']:
             setattr(ch, field, not getattr(ch, field))
         
         db.session.commit()
@@ -228,10 +196,9 @@ def toggle():
         subject = data.get('subject')
         field = data.get('field')
         subject_book = SubjectBooks.query.filter_by(subject=subject).first()
-        if not subject_book:
-            return jsonify({"ok": False}), 404
+        if not subject_book: return jsonify({"ok": False}), 404
         
-        if field in ['pinkbook', 'yellowbook', 'play_with_graphs', 'n_awasthi', 'ms_chauhan']:
+        if field in ['pinkbook','yellowbook','play_with_graphs','n_awasthi','ms_chauhan']:
             current = getattr(subject_book, field)
             setattr(subject_book, field, not current)
             db.session.commit()
@@ -242,5 +209,5 @@ def toggle():
 # Initialize database
 init_db()
 
-# Vercel requirement
-app = app
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
